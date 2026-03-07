@@ -1,0 +1,60 @@
+//sender
+--sending window(swnd)--seq number of msgs sent but not acked,
+--window size-max number of msgs that can be sent without receving the ack
+  |- not greater than recv buffer space
+--msg size=512 bytes
+--seq numbers-1 byte(8 bit)
+--start with seq num 1
+--initially swnd=10
+--adds ktp header(seq number, additional if we want)
+--once it receivs ACK, updates swnd accordingly(slides window till the last acked msg and increses or decreeses window size based on rwnd of the ack msg)
+--sets timeout=T seconds, if it does not receive a ACK in this timout duration, retransmits all the msgs from the swnd(which had been transmitted earlier but not ACKED)
+
+
+
+//receiver
+--receiving window(rwnd)--seq number that the recver is expecting
+--window size-max num of messages it can recv
+--msg buffer size- 10 messages=10 * 512 bytes
+a.recvs in-order message
+1. remove KTP header and write to buffer
+2. free space in buffer(rwnd) updated
+3. recvr sends ack to sender-contains the rwnd size, seq no of last in-order message recvd
+
+b. recvs out-of-order message
+1. if msg seq number within rwnd, keep in buffer, but dont send ack 
+2. KTP recvr needs to handle duplicate msgs, identify dups with seq number, drop if already recvd once
+
+--application periodically reads the mesages, each msg(block) read atomically
+
+
+
+
+--swnd,rwnd represented in terms of number of messages
+--rwnd=free space in recver buffer
+--at any instance, there can be max N active KTP sockets
+
+IMPLEMENTATION OF KTP SOCKET:
+-udp sockets
+-init process
+  |-two threads R(handles all messages received from UDP socket) and 
+  |  S(handles tieouts and retransmissions) 
+  |-shared memory(SM)-info about N KTP sockets
+    SM[i]=struct{
+        whther KTP socket i is free or not,
+        pid of the process that created this ktp socket,
+        corresponding udp socket,
+        ip of other end of socket,
+        port number of other end of socket,
+        send buffer,
+        receive buffer,
+        swnd = { sender window size,
+                 array of seq numbers that have been sent but not acked,
+               }
+        rwnd = {recvr window size,
+                 array of seq number that have been recvd but not acked,
+               }
+      }
+  |-garbage collecter process to cleanup KTP socket if a process if killed
+
+
