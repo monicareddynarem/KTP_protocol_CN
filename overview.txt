@@ -13,7 +13,7 @@
 
 
 //receiver
---receiving window(rwnd)--seq number that the recver is expecting
+--receiving window(rwnd)--seq numbers that the recver is expecting
 --window size-max num of messages it can recv
 --msg buffer size- 10 messages=10 * 512 bytes
 a.recvs in-order message
