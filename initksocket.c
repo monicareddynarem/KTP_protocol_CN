@@ -49,8 +49,8 @@ void S_func(){
 int main(){
     //implement 2 threads R and S
 
-    int shmid=shmget(100,N*sizeof(sock_info),0);
-    int* SM = shmat(shmid,NULL,0);
+    int shmid=shmget(100,N*sizeof(sock_info),IPC_CREAT|0666);
+    sock_info* SM = shmat(shmid,NULL,0);
 
     pthread_t R,S;
 
