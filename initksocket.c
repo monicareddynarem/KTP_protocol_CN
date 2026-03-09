@@ -137,47 +137,70 @@ void R_func(){
                 socklen_t addr_len = sizeof(sender_addr);
                 message recv_pkt;
 
-                int recv_len = recvfrom(SM[i].fd_udp, &recv_pkt, sizeof(recv_pkt), 0, 
-                                        (struct sockaddr*)&sender_addr, &addr_len);
+                int recv_len = recvfrom(SM[i].fd_udp, &recv_pkt, sizeof(recv_pkt), 0, (struct sockaddr*)&sender_addr, &addr_len);
                 
                 if (recv_len > 0) {
                     if (recv_pkt.type == 0) { 
-                        //if the received message is a DATA message
+                        //if the received message is a DATA message(receiver side)
                         
-                        //if 
+                        //if the msg is received, then the recv window size decreases byt 1
                         SM[i].nospace = 0; 
                         if (SM[i].rwnd.rwnd_size > 0) {
                             SM[i].rwnd.rwnd_size--; 
                         }
 
+                        //if after recving message, rwnd size is 0, then set nospace flag=1(no space left in recv buffer)
                         if (SM[i].rwnd.rwnd_size == 0) {
                             SM[i].nospace = 1;
                         }
 
+                        //make an acknowledge message
                         message ack_pkt;
                         ack_pkt.type = 1;
                         ack_pkt.ack_no = recv_pkt.seq_no;
                         ack_pkt.rwnd_size = SM[i].rwnd.rwnd_size;
                         
-                        sendto(SM[i].fd_udp, &ack_pkt, sizeof(ack_pkt), 0, 
-                              (struct sockaddr*)&sender_addr, addr_len);
+                        //send ACK message to sender
+                        sendto(SM[i].fd_udp, &ack_pkt, sizeof(ack_pkt), 0, (struct sockaddr*)&sender_addr, addr_len);
 
                     }
-                    else if (recv_pkt.type == 1) { 
-                        //if the received msg is an ACK message
 
-                        // Update sender window size based on receiver's advertised window
+                    else if (recv_pkt.type == 1) { 
+                        //if the received msg is an ACK message(sender side)
+
+                        //update sender window size based on receiver's  window
                         SM[i].swnd.swnd_size = recv_pkt.rwnd_size;
 
                         // Check if it's a new ACK or Duplicate ACK
                         // (You need logic here to check if recv_pkt.ack_no matches an unacked packet)
-                        int is_new_ack = 1; // Placeholder
+                        //SM[i].swnd.unacked.size=10
+                        int is_new_ack = 0; 
+                        for (int j = 0; j <10 ;j++)
+                        {
+                            if(SM[i].swnd.unacked[j]==-1 && SM[i].swnd.unacked[j] == recv_pkt.ack_no){
+                                is_new_ack=1;
+                                SW[i].swnd.unacked[j]=-1;
+                                break;
+                            }
+                        }
                         
-                        if (is_new_ack) {
-                            // Remove message from sender-side buffer
-                            // Update unacked array
+                       if (is_new_ack) {
+                            //remove message from sender-side buffer
+                            for (int k = 0; k < SEND_BUF_SIZE; k++) {
+                                if (SM[i].send_buffer[k].seq_no == recv_pkt.ack_no) {
+                                    //mark the slot as empty (-1)
+                                    // you would increment your 'start index of window' here instead.
+                                    SM[i].send_buffer[k].seq_no = -1; 
+                                    break;
+                                }
+                            }
+
+                            // Note: If your assignment expects "Cumulative ACKs" (where an ACK for 
+                            // seq 5 means 1, 2, 3, 4, and 5 are ALL received), you would change 
+                            // the '==' checks above to '<=' to clear out multiple packets at once.
+                            
                         } else {
-                            // Duplicate ACK - do nothing else as swnd is already updated
+                            // Duplicate ACK 
                         }
                     }
                 }
