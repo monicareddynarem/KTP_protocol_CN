@@ -2,9 +2,19 @@
 #include<sys/types.h>
 #include<stdlib.h>
 #include<pthread.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <sys/select.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+
+
 #define N 100
 #define SEND_BUF_SIZE 100
 #define RECV_BUF_SIZE 10
+
 
 typedef struct swnd_struct{
     int swnd_size;
@@ -18,7 +28,10 @@ typedef struct rwnd_struct{
 
 
 typedef struct message{
+    int type;//0-Data,1-ack
     int seq_no;
+    int ack_no;
+    int rwnd_size;
     char msg_data[512];//each msg is 512 bytes(fixed)
 }message;
 
@@ -32,30 +45,172 @@ typedef struct sock_info{
     message recv_buffer[RECV_BUF_SIZE];
     swnd_struct swnd;
     rwnd_struct rwnd;
+    int nospace;
 }sock_info;
+
+
+sock_info* SM;
+
 
 void garbage_collecter(){
 
 
 }
 
+
+
 void R_func(){
-    
-    //receiver thread function
+    //handles receiving messages from udp sockets
+    fd_set read_set;
+    struct timeval timeout;
+    int max_fd;
+    // int active_sockets=0;
+
+    while(1){
+        FD_ZERO(&read_set);
+        max_fd=-1;
+
+        for(int i=0;i<N;i++){
+            if (SM[i].free == 0) { 
+                // active_sockets++;
+                FD_SET(SM[i].fd_udp, &read_set);
+                if (SM[i].fd_udp > max_fd) {
+                    max_fd = SM[i].fd_udp;
+                }
+            }
+        }
+
+        if (max_fd == -1) {
+            usleep(100000); //100ms
+            continue;
+        }
+
+        //timeout value is 0.5s
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 500000;
+
+        int status=select(max_fd+1,&read_set,NULL,NULL,&timeout);
+
+        if(status<0){
+            perror("Error in select");
+            continue;
+        }
+
+
+        if(status==0){
+            //timeout occurred
+            // int new_sockets=0;
+            // for(int i=0;i<N;i++){
+            //     if(SM[i].free==0){
+            //         new_sockets++;
+            //     }
+            // }
+
+            for (int i = 0; i < N; i++) {
+                if (SM[i].free == 0 && SM[i].nospace==1) {
+                    if (SM[i].rwnd.rwnd_size > 0) {  
+                        message dup_ack;
+                        dup_ack.type = 1;
+                        dup_ack.ack_no = SM[i].rwnd.expected[0];
+                        dup_ack.rwnd_size = SM[i].rwnd.rwnd_size;
+                        
+                        struct sockaddr_in dest_addr;
+                        dest_addr.sin_family = AF_INET;
+                        dest_addr.sin_port = htons(SM[i].port);
+                        inet_pton(AF_INET, SM[i].IP, &dest_addr.sin_addr);
+
+                        sendto(SM[i].fd_udp, &dup_ack, sizeof(dup_ack), 0, 
+                              (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+                    }
+                }
+            }
+        continue;
+        }
+
+
+        //status > 0, socks are ready for activity(reading)
+        for(int i=0;i<N;i++){
+            //if the socket is active and it is ready to read data
+            if(SM[i].free==0 && FD_ISSET(SM[i].fd_udp,&read_set)){
+                //rread the data 
+                struct sockaddr_in sender_addr;
+                socklen_t addr_len = sizeof(sender_addr);
+                message recv_pkt;
+
+                int recv_len = recvfrom(SM[i].fd_udp, &recv_pkt, sizeof(recv_pkt), 0, 
+                                        (struct sockaddr*)&sender_addr, &addr_len);
+                
+                if (recv_len > 0) {
+                    if (recv_pkt.type == 0) { 
+                        //if the received message is a DATA message
+                        
+                        //if 
+                        SM[i].nospace = 0; 
+                        if (SM[i].rwnd.rwnd_size > 0) {
+                            SM[i].rwnd.rwnd_size--; 
+                        }
+
+                        if (SM[i].rwnd.rwnd_size == 0) {
+                            SM[i].nospace = 1;
+                        }
+
+                        message ack_pkt;
+                        ack_pkt.type = 1;
+                        ack_pkt.ack_no = recv_pkt.seq_no;
+                        ack_pkt.rwnd_size = SM[i].rwnd.rwnd_size;
+                        
+                        sendto(SM[i].fd_udp, &ack_pkt, sizeof(ack_pkt), 0, 
+                              (struct sockaddr*)&sender_addr, addr_len);
+
+                    }
+                    else if (recv_pkt.type == 1) { 
+                        //if the received msg is an ACK message
+
+                        // Update sender window size based on receiver's advertised window
+                        SM[i].swnd.swnd_size = recv_pkt.rwnd_size;
+
+                        // Check if it's a new ACK or Duplicate ACK
+                        // (You need logic here to check if recv_pkt.ack_no matches an unacked packet)
+                        int is_new_ack = 1; // Placeholder
+                        
+                        if (is_new_ack) {
+                            // Remove message from sender-side buffer
+                            // Update unacked array
+                        } else {
+                            // Duplicate ACK - do nothing else as swnd is already updated
+                        }
+                    }
+                }
+
+            }
+        }
+
+    }
 }
+
+
 void S_func(){
     //sender thread function
 }
+
+
+
 int main(){
     //implement 2 threads R and S
 
-    int shmid=shmget(100,N*sizeof(sock_info),0);
-    int* SM = shmat(shmid,NULL,0);
+    int shmid=shmget(100,N*sizeof(sock_info),IPC_CREAT|0666);
+    SM = shmat(shmid,NULL,0);
 
     pthread_t R,S;
 
     // create threads R and S
     pthread_create(&R,NULL,R_func,NULL);
     pthread_create(&S,NULL,S_func,NULL);
+
+
+    pthread_join(R,NULL);
+    pthread_join(S,NULL);
+
+
     return 0;
 }
