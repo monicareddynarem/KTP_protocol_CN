@@ -12,7 +12,7 @@
 #define N 100
 #define SEND_BUF_SIZE 100
 #define RECV_BUF_SIZE 10
-
+#define TIMEOUT_T_MS 1000
 
 typedef struct swnd_struct{
     int swnd_size;
@@ -43,6 +43,7 @@ typedef struct sock_info{
     message recv_buffer[RECV_BUF_SIZE];
     swnd_struct swnd;
     rwnd_struct rwnd;
+    long long send_times[10];
     int nospace;
 }sock_info;
 
@@ -211,10 +212,125 @@ void R_func(){
 }
 
 
-void S_func(){
-    //sender thread function
+long long get_current_time_ms() {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (long long)(tv.tv_sec) * 1000 + (tv.tv_usec / 1000);
 }
 
+
+void S_func(){
+    //handles timeout and retransmissions
+    long sleep_time_us = (TIMEOUT_T_MS / 2) * 1000;
+
+    while (1) {
+        // 1. Sleep for T/2
+        usleep(sleep_time_us);
+
+        long long current_time = get_current_time_ms();
+
+        // 2. Loop through all KTP sockets
+        for (int i = 0; i < N; i++) {
+            if (SM[i].free == 0) { // If socket is active
+                
+                struct sockaddr_in dest_addr;
+                dest_addr.sin_family = AF_INET;
+                dest_addr.sin_port = htons(SM[i].port);
+                inet_pton(AF_INET, SM[i].IP, &dest_addr.sin_addr);
+
+                // ==========================================
+                // PHASE A: Check for Timeouts & Retransmit
+                // ==========================================
+                int timeout_occurred = 0;
+
+                // Check if ANY unacked message has exceeded timeout T
+                for (int j = 0; j < 10; j++) {
+                    if (SM[i].swnd.unacked[j] != -1) { // Assuming -1 means empty slot
+                        if ((current_time - SM[i].swnd.send_times[j]) > TIMEOUT_T_MS) {
+                            timeout_occurred = 1;
+                            break; // One timeout triggers retransmission for the whole window
+                        }
+                    }
+                }
+
+                if (timeout_occurred) {
+                    printf("Timeout occurred on socket %d. Retransmitting window...\n", SM[i].fd_udp);
+                    
+                    // Retransmit all unacked messages in the current window
+                    for (int j = 0; j < 10; j++) {
+                        if (SM[i].swnd.unacked[j] != -1) {
+                            int seq_to_resend = SM[i].swnd.unacked[j];
+                            
+                            // Find the message in the send buffer
+                            for (int k = 0; k < SEND_BUF_SIZE; k++) {
+                                if (SM[i].send_buffer[k].seq_no == seq_to_resend) {
+                                    
+                                    // Retransmit the message
+                                    sendto(SM[i].fd_udp, &SM[i].send_buffer[k], sizeof(message), 0,
+                                           (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+                                    
+                                    // Update the timestamp for this retransmission
+                                    SM[i].swnd.send_times[j] = get_current_time_ms();
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ==========================================
+                // PHASE B: Send New Pending Messages
+                // ==========================================
+                
+                // First, count how many messages are currently unacked
+                int current_unacked_count = 0;
+                for (int j = 0; j < 10; j++) {
+                    if (SM[i].swnd.unacked[j] != -1) {
+                        current_unacked_count++;
+                    }
+                }
+
+                // If we have room in the sender window (and the receiver's window isn't 0)
+                if (current_unacked_count < SM[i].swnd.swnd_size) {
+                    
+                    int available_slots = SM[i].swnd.swnd_size - current_unacked_count;
+
+                    // Search the send_buffer for valid messages that HAVEN'T been sent yet
+                    for (int k = 0; k < SEND_BUF_SIZE && available_slots > 0; k++) {
+                        if (SM[i].send_buffer[k].seq_no != -1) { 
+                            
+                            // Check if this message is already in the unacked array
+                            int already_sent = 0;
+                            for (int j = 0; j < 10; j++) {
+                                if (SM[i].swnd.unacked[j] == SM[i].send_buffer[k].seq_no) {
+                                    already_sent = 1;
+                                    break;
+                                }
+                            }
+
+                            // If it hasn't been sent, SEND IT!
+                            if (!already_sent) {
+                                sendto(SM[i].fd_udp, &SM[i].send_buffer[k], sizeof(message), 0,
+                                       (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+                                
+                                // Find an empty slot in unacked array to store it
+                                for (int j = 0; j < 10; j++) {
+                                    if (SM[i].swnd.unacked[j] == -1) {
+                                        SM[i].swnd.unacked[j] = SM[i].send_buffer[k].seq_no;
+                                        SM[i].swnd.send_times[j] = get_current_time_ms(); // Set timestamp
+                                        break;
+                                    }
+                                }
+                                available_slots--;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return NULL;
+}
 
 
 int main(){
