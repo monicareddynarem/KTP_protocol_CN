@@ -1,11 +1,11 @@
 #include<sys/shm.h>
 #include<sys/types.h>
-
+#include<stdlib.h>
+#include<pthread.h>
 #define N 100
 #define SEND_BUF_SIZE 100
 #define RECV_BUF_SIZE 10
 
-//still need to improve
 typedef struct swnd_struct{
     int swnd_size;
     int unacked[10];
@@ -39,12 +39,23 @@ void garbage_collecter(){
 
 }
 
-
+void R_func(){
+    
+    //receiver thread function
+}
+void S_func(){
+    //sender thread function
+}
 int main(){
     //implement 2 threads R and S
 
     int shmid=shmget(100,N*sizeof(sock_info),0);
+    int* SM = shmat(shmid,NULL,0);
 
+    pthread_t R,S;
 
+    // create threads R and S
+    pthread_create(&R,NULL,R_func,NULL);
+    pthread_create(&S,NULL,S_func,NULL);
     return 0;
 }
