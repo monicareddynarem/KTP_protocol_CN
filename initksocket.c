@@ -9,8 +9,6 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-
-
 #define N 100
 #define SEND_BUF_SIZE 100
 #define RECV_BUF_SIZE 10
@@ -50,11 +48,12 @@ typedef struct sock_info{
 
 
 sock_info* SM;
+int shmid;
 
 
 void garbage_collecter(){
-
-
+    shmdt(SM);
+    shmctl(shmid, IPC_RMID, NULL);
 }
 
 
@@ -221,7 +220,7 @@ void S_func(){
 int main(){
     //implement 2 threads R and S
 
-    int shmid=shmget(100,N*sizeof(sock_info),IPC_CREAT|0666);
+    shmid=shmget(100,N*sizeof(sock_info),IPC_CREAT|0666);
     SM = shmat(shmid,NULL,0);
 
     pthread_t R,S;

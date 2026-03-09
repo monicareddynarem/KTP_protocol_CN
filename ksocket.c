@@ -27,7 +27,7 @@ typedef struct message{
 }message;
 
 typedef struct sock_info{
-    int free;//1 if free, 0 if not free
+    int not_free;//0 if free, 1 if not free
     pid_t ppid;//parent process pid
     int fd_udp;//underlying udp socket
     char* IP;//other end IP
@@ -51,8 +51,8 @@ int k_socket(int domain, int type, int protocol){
     SM = shmat(shmid,NULL,0);
 
     for(int i=0;i<N;i++){
-        if(SM[i].free==1){
-            SM[i].free=0;
+        if(SM[i].not_free==0){
+            SM[i].not_free=1;
             SM[i].ppid=getpid();
             SM[i].fd_udp=sock;
             SM[i].send_buffer_sz=0;
@@ -116,12 +116,34 @@ int k_sendto(int sock_KTP, const void buf[.size], size_t size, int flags, const 
 
 
 int k_recvfrom(int sock_KTP, const void buf[.size], size_t size, int flags, const struct sockaddr *dest_addr, socklen_t addrlen){
-    
+    if(recv_buffer_sz > 0){
+        //copy message from recv buffer to buf
+        message* msg = &SM[sock_KTP].recv_buffer[0];
+        strncpy(buf, msg->msg_data, size);
+        //remove message from recv buffer
+        for(int i=1; i<SM[sock_KTP].recv_buffer_sz; i++){
+            SM[sock_KTP].recv_buffer[i-1] = SM[sock_KTP].recv_buffer[i];
+        }
+        SM[sock_KTP].recv_buffer_sz--;
+        return 0; // no error
+    }
+    else{
+        errno = ENOMESSAGE;
+        return -1;// no message to receive
+    }
 }
 
-void k_close(){
-
-
+int k_close(int sock_ktp){
+    int rval = close(SM[sock_ktp].fd_udp);
+    SM[sock_ktp].not_free = 0;//mark as free
+    SM[sock_ktp].ppid = 0;
+    SM[sock_ktp].fd_udp = 0;
+    SM[sock_ktp].IP = NULL;
+    SM[sock_ktp].port = 0;
+    SM[sock_ktp].cur_seq_no = 0;
+    SM[sock_ktp].send_buffer_sz = 0;
+    SM[sock_ktp].recv_buffer_sz = 0;
+    return rval;
 }
 
 int drop_message(float p){
