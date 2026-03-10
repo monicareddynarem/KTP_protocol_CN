@@ -45,6 +45,10 @@ int shmid;
 sock_info* SM;
 
 int k_socket(int domain, int type, int protocol){
+    if(type != SOCK_KTP){
+        errno = ENOTSUP;
+        return -1;//only datagram sockets supported
+    }
     int sock=socket(domain, SOCK_DGRAM, protocol);
     //check free space available in SM
     shmid=shmget(100,N*sizeof(sock_info),IPC_CREAT|0666);
