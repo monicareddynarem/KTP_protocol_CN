@@ -6,10 +6,12 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <string.h>
+#include<stdio.h>
 #define N 100
 #define SEND_BUF_SIZE 100
 #define RECV_BUF_SIZE 10
-
+int k_errno;
 typedef struct swnd_struct{
     int swnd_size;
     int unacked[10];
@@ -46,7 +48,7 @@ sock_info* SM;
 
 int k_socket(int domain, int type, int protocol){
     if(type != SOCK_KTP){
-        errno = ENOTSUP;
+        k_errno = ENOTSUP;
         return -1;//only datagram sockets supported
     }
     int sock=socket(domain, SOCK_DGRAM, protocol);
@@ -66,7 +68,7 @@ int k_socket(int domain, int type, int protocol){
             return i;
         }
     }
-    errno = ENOSPACE;
+    k_errno = ENOSPACE;
     return -1;//no free space available in SM
 }
 
@@ -91,12 +93,13 @@ int k_bind(int sock_KTP, char* src_IP, int src_port, char* dest_IP, int dest_por
 }
 
 
-int k_sendto(int sock_KTP, const void buf[.size], size_t size, int flags, const struct sockaddr *dest_addr, socklen_t addrlen){
-    char* dest_ip = inet_ntop(AF_INET, &((struct sockaddr_in*)dest_addr)->sin_addr, NULL, 0);
+int k_sendto(int sock_KTP, const void* buf, size_t size, int flags, struct sockaddr *dest_addr, socklen_t addrlen){
+    const char* dest_ip = inet_ntop(AF_INET, &((struct sockaddr_in*)dest_addr)->sin_addr, NULL, 0);
     int dest_port = ntohs(((struct sockaddr_in*)dest_addr)->sin_port);
     if(strcmp(SM[sock_KTP].IP, dest_ip) == 0 && SM[sock_KTP].port == dest_port){
         if((SM[sock_KTP].send_buffer_sz+1) < SEND_BUF_SIZE){
             //add message to send buffer
+            // printf("Adding message to send buffer of socket %d with seq_no %d\n", sock_KTP, SM[sock_KTP].cur_seq_no);
             message* new_msg = (message*)malloc(sizeof(message));
 
             new_msg->seq_no = SM[sock_KTP].cur_seq_no;
@@ -107,20 +110,20 @@ int k_sendto(int sock_KTP, const void buf[.size], size_t size, int flags, const 
             SM[sock_KTP].send_buffer_sz++;
         }
         else{
-            errno = ENOSPACE;
+            k_errno = ENOSPACE;
             return -1;// send buffer full
         }
         return 0; // no error;
     }
     else{
-        errno = ENOTBOUND;
+        k_errno = ENOTBOUND;
         return -1;// socket not bound to this dest IP and port
     }
 }
 
 
-int k_recvfrom(int sock_KTP, const void buf[.size], size_t size, int flags, const struct sockaddr *dest_addr, socklen_t addrlen){
-    if(recv_buffer_sz > 0){
+int k_recvfrom(int sock_KTP, void* buf, size_t size, int flags, const struct sockaddr *dest_addr, socklen_t addrlen){
+    if(SM[sock_KTP].recv_buffer_sz > 0){
         //copy message from recv buffer to buf
         message* msg = &SM[sock_KTP].recv_buffer[0];
         strncpy(buf, msg->msg_data, size);
@@ -132,7 +135,7 @@ int k_recvfrom(int sock_KTP, const void buf[.size], size_t size, int flags, cons
         return 0; // no error
     }
     else{
-        errno = ENOMESSAGE;
+        k_errno = ENOMESSAGE;
         return -1;// no message to receive
     }
 }

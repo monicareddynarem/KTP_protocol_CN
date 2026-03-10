@@ -344,11 +344,12 @@ int main(){
 
     pthread_t R,S;
 
+    printf("Initializing KTP protocol...\n");
     // create threads R and S
     pthread_create(&R,NULL,R_func,NULL);
     pthread_create(&S,NULL,S_func,NULL);
 
-
+    printf("KTP protocol initialized. Running...\n");
     pthread_join(R,NULL);
     pthread_join(S,NULL);
 
