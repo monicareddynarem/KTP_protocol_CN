@@ -8,6 +8,8 @@
 #include <sys/select.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <time.h>
+#include <sys/time.h>
 
 #define N 100
 #define SEND_BUF_SIZE 100
@@ -59,7 +61,7 @@ void garbage_collecter(){
 
 
 
-void R_func(){
+void* R_func(void* arg){
     //handles receiving messages from udp sockets
     fd_set read_set;
     struct timeval timeout;
@@ -179,7 +181,7 @@ void R_func(){
                         {
                             if(SM[i].swnd.unacked[j]==-1 && SM[i].swnd.unacked[j] == recv_pkt.ack_no){
                                 is_new_ack=1;
-                                SW[i].swnd.unacked[j]=-1;
+                                SM[i].swnd.unacked[j]=-1;
                                 break;
                             }
                         }
@@ -209,6 +211,7 @@ void R_func(){
         }
 
     }
+    return NULL;
 }
 
 
@@ -219,7 +222,7 @@ long long get_current_time_ms() {
 }
 
 
-void S_func(){
+void* S_func(void* arg){
     //handles timeout and retransmissions
     long sleep_time_us = (TIMEOUT_T_MS / 2) * 1000;
 
@@ -246,7 +249,7 @@ void S_func(){
                 // Check if ANY unacked message has exceeded timeout T
                 for (int j = 0; j < 10; j++) {
                     if (SM[i].swnd.unacked[j] != -1) { // Assuming -1 means empty slot
-                        if ((current_time - SM[i].swnd.send_times[j]) > TIMEOUT_T_MS) {
+                        if ((current_time - SM[i].send_times[j]) > TIMEOUT_T_MS) {
                             timeout_occurred = 1;
                             break; // One timeout triggers retransmission for the whole window
                         }
@@ -270,7 +273,7 @@ void S_func(){
                                            (struct sockaddr*)&dest_addr, sizeof(dest_addr));
                                     
                                     // Update the timestamp for this retransmission
-                                    SM[i].swnd.send_times[j] = get_current_time_ms();
+                                    SM[i].send_times[j] = get_current_time_ms();
                                     break;
                                 }
                             }
@@ -317,7 +320,7 @@ void S_func(){
                                 for (int j = 0; j < 10; j++) {
                                     if (SM[i].swnd.unacked[j] == -1) {
                                         SM[i].swnd.unacked[j] = SM[i].send_buffer[k].seq_no;
-                                        SM[i].swnd.send_times[j] = get_current_time_ms(); // Set timestamp
+                                        SM[i].send_times[j] = get_current_time_ms(); // Set timestamp
                                         break;
                                     }
                                 }
@@ -349,6 +352,6 @@ int main(){
     pthread_join(R,NULL);
     pthread_join(S,NULL);
 
-
+    garbage_collecter();
     return 0;
 }
