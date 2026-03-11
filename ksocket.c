@@ -99,20 +99,29 @@ int k_bind(int sock_KTP, char* src_IP, int src_port, char* dest_IP, int dest_por
 
 
 int k_sendto(int sock_KTP, const void* buf, size_t size, int flags, struct sockaddr *dest_addr, socklen_t addrlen){
-    const char* dest_ip = inet_ntop(AF_INET, &((struct sockaddr_in*)dest_addr)->sin_addr, NULL, 0);
+    printf("Inside k_sendto for socket %d\n", sock_KTP);
+    char dest_ip[100];
+    inet_ntop(AF_INET, &((struct sockaddr_in*)dest_addr)->sin_addr, dest_ip, sizeof(dest_ip));
     int dest_port = ntohs(((struct sockaddr_in*)dest_addr)->sin_port);
+    printf("Destination IP: %s, Destination Port: %d\n", dest_ip, dest_port);
     if(strcmp(SM[sock_KTP].IP, dest_ip) == 0 && SM[sock_KTP].port == dest_port){
+        printf("Destination IP and port match for socket %d. Adding message to send buffer.\n", sock_KTP);
         if((SM[sock_KTP].send_buffer_sz+1) < SEND_BUF_SIZE){
+            printf("Adding message to send buffer of socket %d with seq_no %d\n", sock_KTP, SM[sock_KTP].cur_seq_no);
             //add message to send buffer
             // printf("Adding message to send buffer of socket %d with seq_no %d\n", sock_KTP, SM[sock_KTP].cur_seq_no);
             message* new_msg = (message*)malloc(sizeof(message));
 
             new_msg->seq_no = SM[sock_KTP].cur_seq_no;
+            printf("Message seq_no set to %d\n", new_msg->seq_no);
             strncpy(new_msg->msg_data, buf, size);  
+            printf("Message data set to: %s\n", new_msg->msg_data);
+            new_msg->type = 0; // Data message
             SM[sock_KTP].cur_seq_no++;
 
             SM[sock_KTP].send_buffer[SM[sock_KTP].send_buffer_sz] = *new_msg;
             SM[sock_KTP].send_buffer_sz++;
+            free(new_msg);
         }
         else{
             k_errno = ENOSPACE;
@@ -121,6 +130,7 @@ int k_sendto(int sock_KTP, const void* buf, size_t size, int flags, struct socka
         return 0; // no error;
     }
     else{
+        printf("Destination IP and port do not match for socket %d. Expected IP: %s, Expected Port: %d\n", sock_KTP, SM[sock_KTP].IP, SM[sock_KTP].port);
         k_errno = ENOTBOUND;
         return -1;// socket not bound to this dest IP and port
     }

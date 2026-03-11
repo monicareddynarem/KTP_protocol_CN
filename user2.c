@@ -33,11 +33,10 @@ int main(){
     char buffer[512];
 
     int n=k_recvfrom(M2,buffer,sizeof(buffer),0,(struct sockaddr*)&server_addr,sizeof(server_addr));
-    if(n<0){
-        perror("Receive failed user2");    }
-    else{
-        printf("Received message: %s\n", buffer);
-    }       
+    while(n<0){
+        n = k_recvfrom(M2,buffer,sizeof(buffer),0,(struct sockaddr*)&server_addr,sizeof(server_addr));   
+    }
+    printf("Received message: %s\n", buffer);
 
     return 0;
 }

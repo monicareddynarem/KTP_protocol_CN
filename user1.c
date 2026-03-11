@@ -40,6 +40,8 @@ int main(){
     dest_addr.sin_port = htons(dest_port);
     inet_pton(AF_INET, dest_ip, &dest_addr.sin_addr);
 
+    sleep(10); // Sleep for a while to allow the receiver to be ready
+
     printf("Sending message to %s:%d...\n", dest_ip, dest_port);
     k_sendto(M1, msg, sizeof(msg), 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
     printf("Exitting\n");
