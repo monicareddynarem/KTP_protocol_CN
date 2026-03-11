@@ -36,11 +36,14 @@ typedef struct message{
 }message;
 
 typedef struct sock_info{
-    int free;//1 if free, 0 if not free
+    int not_free;//1 if free, 0 if not free
     pid_t ppid;//parent process pid
     int fd_udp;//underlying udp socket
     char* IP;//other end IP
     int port;//other end port
+    int cur_seq_no;
+    int send_buffer_sz;// index for send buffer
+    int recv_buffer_sz;// index for recv buffer
     message send_buffer[SEND_BUF_SIZE];//fixed size array of messages
     message recv_buffer[RECV_BUF_SIZE];
     swnd_struct swnd;
@@ -73,7 +76,7 @@ void* R_func(void* arg){
         max_fd=-1;
 
         for(int i=0;i<N;i++){
-            if (SM[i].free == 0) { 
+            if (SM[i].not_free == 1) { 
                 // active_sockets++;
                 FD_SET(SM[i].fd_udp, &read_set);
                 if (SM[i].fd_udp > max_fd) {
@@ -109,7 +112,7 @@ void* R_func(void* arg){
             // }
 
             for (int i = 0; i < N; i++) {
-                if (SM[i].free == 0 && SM[i].nospace==1) {
+                if (SM[i].not_free == 1 && SM[i].nospace==1) {
                     if (SM[i].rwnd.rwnd_size > 0) {  
                         message dup_ack;
                         dup_ack.type = 1;
@@ -133,7 +136,7 @@ void* R_func(void* arg){
         //status > 0, socks are ready for activity(reading)
         for(int i=0;i<N;i++){
             //if the socket is active and it is ready to read data
-            if(SM[i].free==0 && FD_ISSET(SM[i].fd_udp,&read_set)){
+            if(SM[i].not_free==1 && FD_ISSET(SM[i].fd_udp,&read_set)){
                 //rread the data 
                 struct sockaddr_in sender_addr;
                 socklen_t addr_len = sizeof(sender_addr);
@@ -234,7 +237,7 @@ void* S_func(void* arg){
 
         // 2. Loop through all KTP sockets
         for (int i = 0; i < N; i++) {
-            if (SM[i].free == 0) { // If socket is active
+            if (SM[i].not_free == 1) { // If socket is active
                 
                 struct sockaddr_in dest_addr;
                 dest_addr.sin_family = AF_INET;

@@ -24,7 +24,10 @@ typedef struct rwnd_struct{
 
 
 typedef struct message{
+    int type;//0-Data,1-ack
     int seq_no;
+    int ack_no;
+    int rwnd_size;
     char msg_data[512];//each msg is 512 bytes(fixed)
 }message;
 
@@ -41,6 +44,8 @@ typedef struct sock_info{
     message recv_buffer[RECV_BUF_SIZE];
     swnd_struct swnd;
     rwnd_struct rwnd;
+    long long send_times[10];
+    int nospace;
 }sock_info;
 
 int shmid;
