@@ -17,7 +17,6 @@ void garbage_collecter(){
     shmctl(shmid, IPC_RMID, NULL);
 }
 
-//garbage Collector cleans up if a user process crashes
 void* G_func(void* arg){
     while(1) {
         sleep(2);
@@ -102,7 +101,7 @@ void* R_func(void* arg){
                     if (SM[i].rwnd.rwnd_size > 0) {  
                         message dup_ack;
                         dup_ack.type = 1;
-                        dup_ack.ack_no = SM[i].rwnd.expected[0];
+                        dup_ack.ack_no = SM[i].rwnd.expected[0] - 1;
                         dup_ack.rwnd_size = SM[i].rwnd.rwnd_size;
                         
                         struct sockaddr_in dest_addr;
@@ -111,7 +110,6 @@ void* R_func(void* arg){
                         inet_pton(AF_INET, SM[i].IP, &dest_addr.sin_addr);
 
                         sendto(SM[i].fd_udp, &dup_ack, sizeof(dup_ack), 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
-                        SM[i].nospace = 0;
                     }
                     pthread_mutex_unlock(&SM[i].mutex);
                 }
@@ -137,51 +135,45 @@ void* R_func(void* arg){
                     if (recv_pkt.type == 0) { 
                         int is_duplicate = 0;
                         if (recv_pkt.seq_no < SM[i].rwnd.expected[0]) {
-                            is_duplicate = 1; // It's an old packet we already processed
+                            is_duplicate = 1; 
                         } else {
                             for(int k = 0; k < SM[i].recv_buffer_sz; k++) {
                                 if(SM[i].recv_buffer[k].seq_no == recv_pkt.seq_no) {
-                                    is_duplicate = 1; // It's already sitting in the out-of-order buffer
+                                    is_duplicate = 1; 
                                     break;
                                 }
                             }
                         }
 
                         if (is_duplicate) {
-                            // If it's the expected packet (retransmitted) or older, ACK it to prevent sender stall
                             if (recv_pkt.seq_no <= SM[i].rwnd.expected[0]) {
                                 message ack_pkt;
                                 ack_pkt.type = 1;
-                                ack_pkt.ack_no = recv_pkt.seq_no;
+                                ack_pkt.ack_no = SM[i].rwnd.expected[0] - 1;
                                 ack_pkt.rwnd_size = SM[i].rwnd.rwnd_size;
                                 sendto(SM[i].fd_udp, &ack_pkt, sizeof(ack_pkt), 0, (struct sockaddr*)&sender_addr, addr_len);
                             }
                             pthread_mutex_unlock(&SM[i].mutex);
-                            continue; // Drop the duplicate data payload
+                            continue; 
                         }
 
                         SM[i].nospace = 0;
                         if (SM[i].rwnd.rwnd_size > 0) {
                             SM[i].recv_buffer[SM[i].recv_buffer_sz++] = recv_pkt;
                             SM[i].rwnd.rwnd_size--; 
+                            
+                            if (SM[i].rwnd.rwnd_size == 0) {
+                                SM[i].nospace = 1;
+                            }
                         } else {
                             SM[i].nospace = 1;
                             pthread_mutex_unlock(&SM[i].mutex);
-                            continue; // No space, drop it
+                            continue; 
                         }
 
-                        // --- 3. Advance state if it's the expected packet ---
-                        // --- 3. Advance state if it's the expected packet ---
                         if (recv_pkt.seq_no == SM[i].rwnd.expected[0]) {
-                            message ack_pkt;
-                            ack_pkt.type = 1;
-                            ack_pkt.ack_no = recv_pkt.seq_no;
-                            ack_pkt.rwnd_size = SM[i].rwnd.rwnd_size;
-                            sendto(SM[i].fd_udp, &ack_pkt, sizeof(ack_pkt), 0, (struct sockaddr*)&sender_addr, addr_len);
-                            
                             SM[i].rwnd.expected[0]++;
                             
-                            // THE FIX: Fast-forward expected[0] past any packets we already buffered out-of-order!
                             int found_next = 1;
                             while (found_next) {
                                 found_next = 0;
@@ -189,19 +181,28 @@ void* R_func(void* arg){
                                     if(SM[i].recv_buffer[k].seq_no == SM[i].rwnd.expected[0]) {
                                         SM[i].rwnd.expected[0]++;
                                         found_next = 1;
-                                        break; // Break the for loop, but re-run the while loop
+                                        break; 
                                     }
                                 }
                             }
+
+                            message ack_pkt;
+                            ack_pkt.type = 1;
+                            ack_pkt.ack_no = SM[i].rwnd.expected[0] - 1;
+                            ack_pkt.rwnd_size = SM[i].rwnd.rwnd_size;
+                            sendto(SM[i].fd_udp, &ack_pkt, sizeof(ack_pkt), 0, (struct sockaddr*)&sender_addr, addr_len);
                         }
+                        
+                        pthread_mutex_unlock(&SM[i].mutex);
                     }
                     else if (recv_pkt.type == 1) { 
                         SM[i].swnd.swnd_size = recv_pkt.rwnd_size;
                         for (int j = 0; j < 10; j++) {
-                            if(SM[i].swnd.unacked[j] != -1 && SM[i].swnd.unacked[j] == recv_pkt.ack_no){
+                            if(SM[i].swnd.unacked[j] != -1 && SM[i].swnd.unacked[j] <= recv_pkt.ack_no){
+                                int acked_seq = SM[i].swnd.unacked[j];
                                 SM[i].swnd.unacked[j] = -1;
                                 for (int k = 0; k < SM[i].send_buffer_sz; k++) {
-                                    if (SM[i].send_buffer[k].seq_no == recv_pkt.ack_no) {
+                                    if (SM[i].send_buffer[k].seq_no == acked_seq) {
                                         for(int x = k; x < SM[i].send_buffer_sz - 1; x++){
                                             SM[i].send_buffer[x] = SM[i].send_buffer[x+1];
                                         }
@@ -209,11 +210,10 @@ void* R_func(void* arg){
                                         break;
                                     }
                                 }
-                                break;
                             }
                         }
+                        pthread_mutex_unlock(&SM[i].mutex);
                     }
-                    pthread_mutex_unlock(&SM[i].mutex);
                 }
             }
         }
@@ -310,22 +310,18 @@ void* S_func(void* arg){
 int main(){
     srand(time(NULL));
 
-    // Initialize shared memory
     shmid = shmget(100, N * sizeof(sock_info), IPC_CREAT | 0666);
     SM = shmat(shmid, NULL, 0);
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
-    // This is vital for Mini Project 1: it allows the mutex to
-    // synchronize different user processes and the init threads.
     pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
-    // Clear out memory to start fresh
+    
     for(int i = 0; i < N; i++) {
         SM[i].not_free = 0;
         SM[i].bind_done = 0;
         if (pthread_mutex_init(&SM[i].mutex, &attr) != 0)
         {
             perror("Mutex init failed");
-            // Handle error...
         }
     }
 
