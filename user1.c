@@ -33,8 +33,8 @@ int main() {
     sleep(2); // Give the receiver a moment to start up
 
     // 1. Open the file to send in Binary Read mode
-    char* filename = "cat.jpg"; // Change this to whatever file you want to send
-    FILE *file = fopen(filename, "rb");
+    char* filename = "send.txt"; // Change this to whatever file you want to send
+    FILE *file = fopen(filename, "r");
     if (!file) {
         perror("Could not open file to send");
         exit(EXIT_FAILURE);

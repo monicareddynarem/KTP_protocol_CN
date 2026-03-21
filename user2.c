@@ -33,7 +33,7 @@ int main() {
     socklen_t addr_len = sizeof(server_addr); 
 
     // 1. Open a new file in Binary Write mode
-    FILE *file = fopen("received_file.jpg", "wb");
+    FILE *file = fopen("recv.txt", "w");
     if (!file) {
         perror("Could not create output file");
         exit(EXIT_FAILURE);

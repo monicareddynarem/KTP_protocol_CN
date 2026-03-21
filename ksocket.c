@@ -35,7 +35,9 @@ int k_socket(int domain, int type, int protocol){
             SM[i].swnd.swnd_size = 10;
             SM[i].rwnd.rwnd_size = 10;
             SM[i].rwnd.expected[0] = 1; // Start expecting sequence number 1
-            
+            SM[i].cur_seq_no = 1;
+            SM[i].app_read_seq_no = 1;
+
             for(int j=0; j<10; j++) SM[i].swnd.unacked[j] = -1;
 
             pthread_mutexattr_t attr;
@@ -90,6 +92,7 @@ int k_sendto(int sock_KTP, const void* buf, size_t size, int flags, struct socka
             memset(new_msg.msg_data, 0, 512);
             memcpy(new_msg.msg_data, buf, size > 512 ? 512 : size);  
             new_msg.type = 0; 
+            new_msg.msg_len = size > 512 ? 512 : size;
 
             SM[sock_KTP].cur_seq_no++;
             SM[sock_KTP].send_buffer[SM[sock_KTP].send_buffer_sz] = new_msg;
@@ -114,16 +117,36 @@ int k_sendto(int sock_KTP, const void* buf, size_t size, int flags, struct socka
 int k_recvfrom(int sock_KTP, void* buf, size_t size, int flags, const struct sockaddr *dest_addr, socklen_t *addrlen){
     pthread_mutex_lock(&SM[sock_KTP].mutex);
     
-    if(SM[sock_KTP].recv_buffer_sz > 0){
-        message* msg = &SM[sock_KTP].recv_buffer[0];
-        memcpy(buf, msg->msg_data, size > 512 ? 512 : size);
+    // 1. Find the exact in-order packet the app expects
+    int found_idx = -1;
+    for(int i = 0; i < SM[sock_KTP].recv_buffer_sz; i++){
+        if(SM[sock_KTP].recv_buffer[i].seq_no == SM[sock_KTP].app_read_seq_no){
+            found_idx = i;
+            break;
+        }
+    }
+
+    if(found_idx != -1){
+        message msg = SM[sock_KTP].recv_buffer[found_idx];
+        int actual_len = msg.msg_len;
         
-        for(int i=1; i<SM[sock_KTP].recv_buffer_sz; i++){
+        // 2. Copy only the actual valid payload
+        memcpy(buf, msg.msg_data, actual_len);
+        
+        // 3. Remove the packet from the buffer by shifting
+        for(int i = found_idx + 1; i < SM[sock_KTP].recv_buffer_sz; i++){
             SM[sock_KTP].recv_buffer[i-1] = SM[sock_KTP].recv_buffer[i];
         }
         SM[sock_KTP].recv_buffer_sz--;
+        
+        // 4. IMPORTANT: Free up window space and advance app sequence
+        if (SM[sock_KTP].rwnd.rwnd_size < 10) {
+            SM[sock_KTP].rwnd.rwnd_size++; 
+        }
+        SM[sock_KTP].app_read_seq_no++;
+        
         pthread_mutex_unlock(&SM[sock_KTP].mutex);
-        return size;
+        return actual_len; // Return actual bytes, allowing EOF (0) to trigger
     }
     else{
         pthread_mutex_unlock(&SM[sock_KTP].mutex);
