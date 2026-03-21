@@ -35,6 +35,7 @@ typedef struct message {
     int seq_no;
     int ack_no;
     int rwnd_size;
+    int msg_len;
     char msg_data[512]; // each msg is 512 bytes(fixed)
 } message;
 
@@ -53,6 +54,7 @@ typedef struct sock_info {
 
     int cur_seq_no;
     int send_buffer_sz;
+    int app_read_seq_no;
     int recv_buffer_sz;
     message send_buffer[SEND_BUF_SIZE];
     message recv_buffer[RECV_BUF_SIZE];

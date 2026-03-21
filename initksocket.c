@@ -135,33 +135,50 @@ void* R_func(void* arg){
                     pthread_mutex_lock(&SM[i].mutex);
                     
                     if (recv_pkt.type == 0) { 
-                        if (recv_pkt.seq_no == SM[i].rwnd.expected[0]) {
-                            //inorder packet
-                            SM[i].nospace = 0; 
-                            if (SM[i].rwnd.rwnd_size > 0) {
-                                SM[i].recv_buffer[SM[i].recv_buffer_sz++] = recv_pkt;
-                                SM[i].rwnd.rwnd_size--; 
-                                SM[i].rwnd.expected[0]++; //expect next sequence
+                        int is_duplicate = 0;
+                        if (recv_pkt.seq_no < SM[i].rwnd.expected[0]) {
+                            is_duplicate = 1; // It's an old packet we already processed
+                        } else {
+                            for(int k = 0; k < SM[i].recv_buffer_sz; k++) {
+                                if(SM[i].recv_buffer[k].seq_no == recv_pkt.seq_no) {
+                                    is_duplicate = 1; // It's already sitting in the out-of-order buffer
+                                    break;
+                                }
                             }
-                            if (SM[i].rwnd.rwnd_size == 0) SM[i].nospace = 1;
+                        }
 
-                            //send ack
+                        if (is_duplicate) {
+                            // If it's the expected packet (retransmitted) or older, ACK it to prevent sender stall
+                            if (recv_pkt.seq_no <= SM[i].rwnd.expected[0]) {
+                                message ack_pkt;
+                                ack_pkt.type = 1;
+                                ack_pkt.ack_no = recv_pkt.seq_no;
+                                ack_pkt.rwnd_size = SM[i].rwnd.rwnd_size;
+                                sendto(SM[i].fd_udp, &ack_pkt, sizeof(ack_pkt), 0, (struct sockaddr*)&sender_addr, addr_len);
+                            }
+                            pthread_mutex_unlock(&SM[i].mutex);
+                            continue; // Drop the duplicate data payload
+                        }
+
+                        SM[i].nospace = 0;
+                        if (SM[i].rwnd.rwnd_size > 0) {
+                            SM[i].recv_buffer[SM[i].recv_buffer_sz++] = recv_pkt;
+                            SM[i].rwnd.rwnd_size--; 
+                        } else {
+                            SM[i].nospace = 1;
+                            pthread_mutex_unlock(&SM[i].mutex);
+                            continue; // No space, drop it
+                        }
+
+                        // --- 3. Advance state if it's the expected packet ---
+                        if (recv_pkt.seq_no == SM[i].rwnd.expected[0]) {
                             message ack_pkt;
                             ack_pkt.type = 1;
                             ack_pkt.ack_no = recv_pkt.seq_no;
                             ack_pkt.rwnd_size = SM[i].rwnd.rwnd_size;
                             sendto(SM[i].fd_udp, &ack_pkt, sizeof(ack_pkt), 0, (struct sockaddr*)&sender_addr, addr_len);
-
-                        } else if (recv_pkt.seq_no > SM[i].rwnd.expected[0]) {
-                            //out of order packet: buffer it, do NOT send ACK
-                            if (SM[i].rwnd.rwnd_size > 0) {
-                                SM[i].recv_buffer[SM[i].recv_buffer_sz++] = recv_pkt;
-                                SM[i].rwnd.rwnd_size--; 
-                            }
-                            if (SM[i].rwnd.rwnd_size == 0) SM[i].nospace = 1;
-
-                        } else {
-                            // Duplicate packet (seq_no < expected): Drop it entirely.
+                            
+                            SM[i].rwnd.expected[0]++;
                         }
                     }
                     else if (recv_pkt.type == 1) { 
