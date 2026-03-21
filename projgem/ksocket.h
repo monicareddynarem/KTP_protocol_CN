@@ -16,8 +16,9 @@
 #define ENOTSUP 259
 
 #define N 100
-#define SEND_BUF_SIZE 10240
-#define RECV_BUF_SIZE 5120
+#define SEND_BUF_SIZE 100
+#define RECV_BUF_SIZE 10
+
 extern int k_errno;
 
 typedef struct swnd_struct {
@@ -71,7 +72,7 @@ extern sock_info* SM;
 int k_socket(int domain, int type, int protocol);
 int k_bind(int sock_KTP, char* src_IP, int src_port, char* dest_IP, int dest_port);
 int k_sendto(int sock_KTP, const void* buf, size_t size, int flags, struct sockaddr *dest_addr, socklen_t addrlen);
-int k_recvfrom(int sock_KTP, void* buf, size_t size, int flags, const struct sockaddr *dest_addr, socklen_t *addrlen);
+int k_recvfrom(int sock_KTP, void* buf, size_t size, int flags, const struct sockaddr *dest_addr, socklen_t addrlen);
 int k_close(int sock_ktp);
 int drop_message(float p);
 
