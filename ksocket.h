@@ -16,8 +16,8 @@
 #define ENOTSUP 259
 
 #define N 100
-#define SEND_BUF_SIZE 10240
-#define RECV_BUF_SIZE 5120
+#define SEND_BUF_SIZE 20
+#define RECV_BUF_SIZE 10
 extern int k_errno;
 
 typedef struct swnd_struct {

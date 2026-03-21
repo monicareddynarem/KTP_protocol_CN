@@ -171,6 +171,7 @@ void* R_func(void* arg){
                         }
 
                         // --- 3. Advance state if it's the expected packet ---
+                        // --- 3. Advance state if it's the expected packet ---
                         if (recv_pkt.seq_no == SM[i].rwnd.expected[0]) {
                             message ack_pkt;
                             ack_pkt.type = 1;
@@ -179,6 +180,19 @@ void* R_func(void* arg){
                             sendto(SM[i].fd_udp, &ack_pkt, sizeof(ack_pkt), 0, (struct sockaddr*)&sender_addr, addr_len);
                             
                             SM[i].rwnd.expected[0]++;
+                            
+                            // THE FIX: Fast-forward expected[0] past any packets we already buffered out-of-order!
+                            int found_next = 1;
+                            while (found_next) {
+                                found_next = 0;
+                                for(int k = 0; k < SM[i].recv_buffer_sz; k++) {
+                                    if(SM[i].recv_buffer[k].seq_no == SM[i].rwnd.expected[0]) {
+                                        SM[i].rwnd.expected[0]++;
+                                        found_next = 1;
+                                        break; // Break the for loop, but re-run the while loop
+                                    }
+                                }
+                            }
                         }
                     }
                     else if (recv_pkt.type == 1) { 
@@ -299,11 +313,20 @@ int main(){
     // Initialize shared memory
     shmid = shmget(100, N * sizeof(sock_info), IPC_CREAT | 0666);
     SM = shmat(shmid, NULL, 0);
-    
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    // This is vital for Mini Project 1: it allows the mutex to
+    // synchronize different user processes and the init threads.
+    pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
     // Clear out memory to start fresh
     for(int i = 0; i < N; i++) {
         SM[i].not_free = 0;
         SM[i].bind_done = 0;
+        if (pthread_mutex_init(&SM[i].mutex, &attr) != 0)
+        {
+            perror("Mutex init failed");
+            // Handle error...
+        }
     }
 
     pthread_t R, S, G;
