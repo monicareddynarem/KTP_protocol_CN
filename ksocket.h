@@ -16,8 +16,8 @@
 #define ENOTSUP 259
 
 #define N 100
-#define SEND_BUF_SIZE 100
-#define RECV_BUF_SIZE 10
+#define SEND_BUF_SIZE 10240
+#define RECV_BUF_SIZE 5120
 
 extern int k_errno;
 

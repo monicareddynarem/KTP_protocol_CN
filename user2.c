@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
-#define CHUNK_SIZE 1024
+#define CHUNK_SIZE 512
 
 int main() {
     int M2 = k_socket(AF_INET, SOCK_KTP, 0);
