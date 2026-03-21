@@ -111,7 +111,7 @@ int k_sendto(int sock_KTP, const void* buf, size_t size, int flags, struct socka
     }
 }
 
-int k_recvfrom(int sock_KTP, void* buf, size_t size, int flags, const struct sockaddr *dest_addr, socklen_t addrlen){
+int k_recvfrom(int sock_KTP, void* buf, size_t size, int flags, const struct sockaddr *dest_addr, socklen_t *addrlen){
     pthread_mutex_lock(&SM[sock_KTP].mutex);
     
     if(SM[sock_KTP].recv_buffer_sz > 0){

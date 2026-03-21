@@ -5,6 +5,8 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
+#define CHUNK_SIZE 1024
+
 int main() {
     int M1 = k_socket(AF_INET, SOCK_KTP, 0);
     if (M1 < 0) {
@@ -22,7 +24,6 @@ int main() {
         perror("Error binding KTP socket");
         exit(EXIT_FAILURE);
     }
-    printf("KTP socket requested bind to src %s:%d\n", src_ip, src_port);
 
     struct sockaddr_in dest_addr;
     dest_addr.sin_family = AF_INET;
@@ -31,17 +32,40 @@ int main() {
 
     sleep(2); // Give the receiver a moment to start up
 
-    char msg[] = "Hello, KTP!";
-    printf("Sending message: '%s' to %s:%d...\n", msg, dest_ip, dest_port);
-    
-    int sent = -1;
-    while (sent < 0) {
-        sent = k_sendto(M1, msg, strlen(msg) + 1, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
-        if (sent < 0) usleep(50000); 
+    // 1. Open the file to send in Binary Read mode
+    char* filename = "cat.jpg"; // Change this to whatever file you want to send
+    FILE *file = fopen(filename, "rb");
+    if (!file) {
+        perror("Could not open file to send");
+        exit(EXIT_FAILURE);
     }
 
-    printf("Message successfully added to send buffer.\n");
+    char buffer[CHUNK_SIZE];
+    size_t bytes_read;
+    int total_sent = 0;
+
+    printf("Starting file transfer for '%s'...\n", filename);
+
+    // 2. Read the file in chunks and send them
+    while ((bytes_read = fread(buffer, 1, CHUNK_SIZE, file)) > 0) {
+        int sent = -1;
+        while (sent < 0) {
+            sent = k_sendto(M1, buffer, bytes_read, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+            if (sent < 0) usleep(10000); // Wait 10ms if buffer is full
+        }
+        total_sent += sent;
+    }
+
+    // 3. Send a 0-byte packet to signal End of File (EOF)
+    int sent_eof = -1;
+    while (sent_eof < 0) {
+        sent_eof = k_sendto(M1, buffer, 0, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+        if (sent_eof < 0) usleep(10000);
+    }
+
+    printf("File successfully added to send buffer. Total bytes: %d\n", total_sent);
     
+    fclose(file);
     sleep(5); // Keep alive to allow background transmission
     k_close(M1);
     printf("Socket closed. Exiting.\n");
