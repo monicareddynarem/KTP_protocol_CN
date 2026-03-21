@@ -66,7 +66,7 @@ int main() {
     printf("File successfully added to send buffer. Total bytes: %d\n", total_sent);
     
     fclose(file);
-    sleep(5); // Keep alive to allow background transmission
+    sleep(7); // Keep alive to allow background transmission
     k_close(M1);
     printf("Socket closed. Exiting.\n");
 

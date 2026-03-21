@@ -156,11 +156,30 @@ int k_recvfrom(int sock_KTP, void* buf, size_t size, int flags, const struct soc
 }
 
 int k_close(int sock_ktp){
+    // 1. FLUSH: Wait for all data (including EOF) to be transmitted AND acknowledged
+    while(1) {
+        pthread_mutex_lock(&SM[sock_ktp].mutex);
+        int pending = 0;
+        
+        // Are there messages still waiting to be sent?
+        if (SM[sock_ktp].send_buffer_sz > 0) pending = 1;
+        
+        // Are there messages sent but not yet ACKed?
+        for(int j = 0; j < 10; j++){
+            if (SM[sock_ktp].swnd.unacked[j] != -1) pending = 1;
+        }
+        pthread_mutex_unlock(&SM[sock_ktp].mutex);
+
+        if (!pending) break; // Everything is sent and acked! We can safely close.
+        usleep(50000); // Check again in 50ms
+    }
+
+    // 2. Now it is safe to signal the daemon to close the OS socket
     pthread_mutex_lock(&SM[sock_ktp].mutex);
-    SM[sock_ktp].bind_done = -1; // Signal daemon to close OS socket
+    SM[sock_ktp].bind_done = -1; 
     pthread_mutex_unlock(&SM[sock_ktp].mutex);
     
-    // Wait for daemon to finish closing
+    // 3. Wait for daemon to finish closing
     while(SM[sock_ktp].not_free == 1) {
         usleep(10000);
     }
