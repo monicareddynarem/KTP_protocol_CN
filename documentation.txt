@@ -153,7 +153,7 @@ Reception Loop: Enters a continuous loop calling k_recvfrom(). If no message is 
 Data Processing: Upon receiving a data chunk, it writes the payload to the file and prints a progress dot (.) to the terminal.
 Termination: If k_recvfrom() returns 0 bytes, it recognizes the EOF signal, breaks the reception loop, closes the file, and gracefully shuts down the socket using k_close().
 
-
+//experimented using three types of files-.txt,.jpg,.pdf
 
 //table for varying p(drop probability) values
 
@@ -197,3 +197,4 @@ Termination: If k_recvfrom() returns 0 bytes, it recognizes the EOF signal, brea
     Total Unique Messages: 182
     Total Transmissions: 709
     Average Transmissions per Message: 3.90
+
