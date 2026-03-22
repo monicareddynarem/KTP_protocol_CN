@@ -7,7 +7,20 @@
 
 #define CHUNK_SIZE 512
 
-int main() {
+int main(int argc, char* argv[]) {
+    char* src_ip = "127.0.0.1";
+    char* dest_ip = "127.0.0.2";
+    int src_port = 8080;
+    int dest_port = 9090;
+    char* filename= "cat.jpg";
+    if(argc == 6) {
+        src_ip = argv[1];
+        dest_ip = argv[2];
+        src_port = atoi(argv[3]);
+        dest_port = atoi(argv[4]);
+        filename = argv[5];
+    }
+
     int M1 = k_socket(AF_INET, SOCK_KTP, 0);
     if (M1 < 0) {
         perror("Error creating KTP socket");
@@ -15,10 +28,7 @@ int main() {
     }
     printf("KTP socket created with index: %d\n", M1);
 
-    char* src_ip = "127.0.0.1";
-    char* dest_ip = "127.0.0.2";
-    int src_port = 8080;
-    int dest_port = 9090;
+    
 
     if (k_bind(M1, src_ip, src_port, dest_ip, dest_port) < 0) {
         perror("Error binding KTP socket");
@@ -32,7 +42,6 @@ int main() {
 
     sleep(2);
 
-    char* filename = "cat.jpg"; 
     FILE *file = fopen(filename, "rb");
     if (!file) {
         perror("Could not open file to send");

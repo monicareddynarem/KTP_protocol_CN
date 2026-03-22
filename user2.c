@@ -6,18 +6,27 @@
 
 #define CHUNK_SIZE 512
 
-int main() {
+int main(int argc, char* argv[]) {
+    char* src_ip = "127.0.0.2";
+    char* dest_ip = "127.0.0.1";
+    int src_port = 9090;
+    int dest_port = 8080;
+    char* filename="received.jpg";
+    if(argc == 6) {
+        src_ip = argv[1];
+        dest_ip = argv[2];
+        src_port = atoi(argv[3]);
+        dest_port = atoi(argv[4]);
+        filename = argv[5];
+    }
+
     int M2 = k_socket(AF_INET, SOCK_KTP, 0);
     if (M2 < 0) {
         perror("Error creating KTP socket");
         exit(EXIT_FAILURE);
     }
 
-    char* src_ip = "127.0.0.2";
-    char* dest_ip = "127.0.0.1";
-    int src_port = 9090;
-    int dest_port = 8080;
-
+    
     if (k_bind(M2, src_ip, src_port, dest_ip, dest_port) < 0) {
         perror("Bind failed user2");
         exit(EXIT_FAILURE);
@@ -31,7 +40,7 @@ int main() {
     
     socklen_t addr_len = sizeof(server_addr); 
 
-    FILE *file = fopen("recieved.jpg", "wb");
+    FILE *file = fopen(filename, "wb");
     if (!file) {
         perror("Could not create output file");
         exit(EXIT_FAILURE);

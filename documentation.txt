@@ -155,26 +155,25 @@ Termination: If k_recvfrom() returns 0 bytes, it recognizes the EOF signal, brea
 
 
 
-
 //table for varying p(drop probability) values
 
-[0] Testing with DROP_PROB = 0.05
+[0] Drop Message Probability: 0.05
     Total Unique Messages: 182
     Total Transmissions: 254
     Average Transmissions per Message: 1.40
-[1] Testing with DROP_PROB = 0.10
+[1] Drop Message Probability: 0.10
     Total Unique Messages: 182
     Total Transmissions: 264
     Average Transmissions per Message: 1.45
-[2] Testing with DROP_PROB = 0.15
+[2] Drop Message Probability: 0.15
     Total Unique Messages: 182
     Total Transmissions: 289
     Average Transmissions per Message: 1.59
-[3] Testing with DROP_PROB = 0.20
+[3] Drop Message Probability: 0.20
     Total Unique Messages: 182
     Total Transmissions: 334
     Average Transmissions per Message: 1.84
-[4] Testing with DROP_PROB = 0.25
+[4] Drop Message Probability: 0.25
     Total Unique Messages: 182
     Total Transmissions: 453
     Average Transmissions per Message: 2.49
@@ -182,3 +181,19 @@ Termination: If k_recvfrom() returns 0 bytes, it recognizes the EOF signal, brea
     Total Unique Messages: 182
     Total Transmissions: 476
     Average Transmissions per Message: 2.62
+[6] Drop Message Probability: 0.350000
+    Total Unique Messages: 182
+    Total Transmissions: 494
+    Average Transmissions per Message: 2.71
+[7] Drop Message Probability: 0.400000
+    Total Unique Messages: 182
+    Total Transmissions: 540
+    Average Transmissions per Message: 2.97
+[8] Drop Message Probability: 0.450000
+    Total Unique Messages: 182
+    Total Transmissions: 536
+    Average Transmissions per Message: 2.95
+[9] Drop Message Probability: 0.500000
+    Total Unique Messages: 182
+    Total Transmissions: 709
+    Average Transmissions per Message: 3.90
