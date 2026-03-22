@@ -262,6 +262,7 @@ void* S_func(void* arg){
                                     sendto(SM[i].fd_udp, &SM[i].send_buffer[k], sizeof(message), 0,
                                            (struct sockaddr*)&dest_addr, sizeof(dest_addr));
                                     SM[i].send_times[j] = get_current_time_ms();
+                                    SM[i].total_transmissions++;
                                     break;
                                 }
                             }
@@ -288,6 +289,7 @@ void* S_func(void* arg){
                         if (!already_sent) {
                             sendto(SM[i].fd_udp, &SM[i].send_buffer[k], sizeof(message), 0,
                                    (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+                            SM[i].total_transmissions++;
                                 
                             for (int j = 0; j < 10; j++) {
                                 if (SM[i].swnd.unacked[j] == -1) {

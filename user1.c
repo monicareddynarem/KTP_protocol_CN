@@ -30,11 +30,10 @@ int main() {
     dest_addr.sin_port = htons(dest_port);
     inet_pton(AF_INET, dest_ip, &dest_addr.sin_addr);
 
-    sleep(2); // Give the receiver a moment to start up
+    sleep(2);
 
-    // 1. Open the file to send in Binary Read mode
-    char* filename = "send.txt"; // Change this to whatever file you want to send
-    FILE *file = fopen(filename, "r");
+    char* filename = "cat.jpg"; 
+    FILE *file = fopen(filename, "rb");
     if (!file) {
         perror("Could not open file to send");
         exit(EXIT_FAILURE);
@@ -46,17 +45,15 @@ int main() {
 
     printf("Starting file transfer for '%s'...\n", filename);
 
-    // 2. Read the file in chunks and send them
     while ((bytes_read = fread(buffer, 1, CHUNK_SIZE, file)) > 0) {
         int sent = -1;
         while (sent < 0) {
             sent = k_sendto(M1, buffer, bytes_read, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
-            if (sent < 0) usleep(10000); // Wait 10ms if buffer is full
+            if (sent < 0) usleep(10000);
         }
         total_sent += sent;
     }
 
-    // 3. Send a 0-byte packet to signal End of File (EOF)
     int sent_eof = -1;
     while (sent_eof < 0) {
         sent_eof = k_sendto(M1, buffer, 0, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
@@ -66,7 +63,7 @@ int main() {
     printf("File successfully added to send buffer. Total bytes: %d\n", total_sent);
     
     fclose(file);
-    sleep(7); // Keep alive to allow background transmission
+    sleep(7); 
     k_close(M1);
     printf("Socket closed. Exiting.\n");
 

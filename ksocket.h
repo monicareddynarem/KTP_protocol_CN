@@ -18,6 +18,7 @@
 #define N 100
 #define SEND_BUF_SIZE 20
 #define RECV_BUF_SIZE 10
+
 extern int k_errno;
 
 typedef struct swnd_struct {
@@ -31,26 +32,26 @@ typedef struct rwnd_struct {
 } rwnd_struct;
 
 typedef struct message {
-    int type; // 0-Data, 1-ack
+    int type; 
     int seq_no;
     int ack_no;
     int rwnd_size;
     int msg_len;
-    char msg_data[512]; // each msg is 512 bytes(fixed)
+    char msg_data[512]; 
 } message;
 
 typedef struct sock_info {
-    int not_free; // 0 if free, 1 if not free
-    pid_t ppid;   // parent process pid
-    int fd_udp;   // underlying udp socket managed by daemon
+    int not_free; 
+    pid_t ppid;   
+    int fd_udp;   
     
-    char src_IP[16]; // Source IP requested by user
-    int src_port;    // Source Port requested by user
+    char src_IP[16]; 
+    int src_port;    
     
-    char IP[16];     // Destination IP
-    int port;        // Destination port
+    char IP[16];     
+    int port;        
     
-    int bind_done;   // 0=Init, 1=Bind Requested, 2=Bound by Daemon, -1=Close Requested
+    int bind_done;   
 
     int cur_seq_no;
     int send_buffer_sz;
@@ -63,10 +64,12 @@ typedef struct sock_info {
     long long send_times[10];
     int nospace;
 
+    int total_transmissions;
+    int total_messages;
+
     pthread_mutex_t mutex; 
 } sock_info;
 
-// Global pointers for the shared memory (resolved at link time)
 extern int shmid;
 extern sock_info* SM;
 
@@ -77,4 +80,4 @@ int k_recvfrom(int sock_KTP, void* buf, size_t size, int flags, const struct soc
 int k_close(int sock_ktp);
 int drop_message(float p);
 
-#endif // KSOCKET_H
+#endif

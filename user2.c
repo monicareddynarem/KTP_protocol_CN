@@ -29,11 +29,9 @@ int main() {
     server_addr.sin_port = htons(dest_port);
     inet_pton(AF_INET, dest_ip, &server_addr.sin_addr);
     
-    // FIX: Must use a variable to pass by reference to recvfrom
     socklen_t addr_len = sizeof(server_addr); 
 
-    // 1. Open a new file in Binary Write mode
-    FILE *file = fopen("recv.txt", "w");
+    FILE *file = fopen("recieved.jpg", "wb");
     if (!file) {
         perror("Could not create output file");
         exit(EXIT_FAILURE);
@@ -44,26 +42,22 @@ int main() {
     
     printf("Waiting for file data...\n");
 
-    // 2. Loop continuously to receive chunks
     while (1) {
         int n = -1;
         while (n < 0) {
-            // Passing &addr_len here!
             n = k_recvfrom(M2, buffer, CHUNK_SIZE, 0, (struct sockaddr*)&server_addr, &addr_len);
-            if (n < 0) usleep(10000); // Wait 10ms if no message
+            if (n < 0) usleep(10000); 
         }
         
-        // 3. If we receive a 0-byte message, it means the sender finished
         if (n == 0) {
             printf("\nEOF signal received. File transfer complete.\n");
             break; 
         }
 
-        // 4. Write the received chunk to the file
         fwrite(buffer, 1, n, file);
         total_received += n;
         
-        // Optional: Print a dot for every chunk so you can see progress
+        // a dot for every chunk
         printf("."); 
         fflush(stdout);
     }

@@ -18,7 +18,6 @@ int k_socket(int domain, int type, int protocol){
         return -1;
     }
     
-    // Attach to shared memory if not already attached in this process
     if (SM == NULL) {
         shmid = shmget(100, N * sizeof(sock_info), IPC_CREAT | 0666);
         SM = shmat(shmid, NULL, 0);
@@ -34,9 +33,11 @@ int k_socket(int domain, int type, int protocol){
             SM[i].cur_seq_no = 1;
             SM[i].swnd.swnd_size = 10;
             SM[i].rwnd.rwnd_size = 10;
-            SM[i].rwnd.expected[0] = 1; // Start expecting sequence number 1
-            SM[i].cur_seq_no = 1;
+            SM[i].rwnd.expected[0] = 1; 
             SM[i].app_read_seq_no = 1;
+            
+            SM[i].total_transmissions = 0;
+            SM[i].total_messages = 0;
 
             for(int j=0; j<10; j++) SM[i].swnd.unacked[j] = -1;
 
@@ -63,16 +64,15 @@ int k_bind(int sock_KTP, char* src_IP, int src_port, char* dest_IP, int dest_por
     SM[sock_KTP].IP[15] = '\0';
     SM[sock_KTP].port = dest_port;
     
-    SM[sock_KTP].bind_done = 1; // Signal the daemon to bind the socket
+    SM[sock_KTP].bind_done = 1; 
     pthread_mutex_unlock(&SM[sock_KTP].mutex);
 
-    // Wait for the daemon to finish binding the OS socket
     while (SM[sock_KTP].bind_done == 1) {
         usleep(10000); 
     }
 
     if (SM[sock_KTP].bind_done == -1) {
-        return -1; // Daemon failed to bind
+        return -1; 
     }
 
     return 0;
@@ -97,6 +97,7 @@ int k_sendto(int sock_KTP, const void* buf, size_t size, int flags, struct socka
             SM[sock_KTP].cur_seq_no++;
             SM[sock_KTP].send_buffer[SM[sock_KTP].send_buffer_sz] = new_msg;
             SM[sock_KTP].send_buffer_sz++;
+            SM[sock_KTP].total_messages++;
 
             pthread_mutex_unlock(&SM[sock_KTP].mutex);
             return size;
@@ -117,7 +118,6 @@ int k_sendto(int sock_KTP, const void* buf, size_t size, int flags, struct socka
 int k_recvfrom(int sock_KTP, void* buf, size_t size, int flags, const struct sockaddr *dest_addr, socklen_t *addrlen){
     pthread_mutex_lock(&SM[sock_KTP].mutex);
     
-    // 1. Find the exact in-order packet the app expects
     int found_idx = -1;
     for(int i = 0; i < SM[sock_KTP].recv_buffer_sz; i++){
         if(SM[sock_KTP].recv_buffer[i].seq_no == SM[sock_KTP].app_read_seq_no){
@@ -130,23 +130,20 @@ int k_recvfrom(int sock_KTP, void* buf, size_t size, int flags, const struct soc
         message msg = SM[sock_KTP].recv_buffer[found_idx];
         int actual_len = msg.msg_len;
         
-        // 2. Copy only the actual valid payload
         memcpy(buf, msg.msg_data, actual_len);
         
-        // 3. Remove the packet from the buffer by shifting
         for(int i = found_idx + 1; i < SM[sock_KTP].recv_buffer_sz; i++){
             SM[sock_KTP].recv_buffer[i-1] = SM[sock_KTP].recv_buffer[i];
         }
         SM[sock_KTP].recv_buffer_sz--;
         
-        // 4. IMPORTANT: Free up window space and advance app sequence
         if (SM[sock_KTP].rwnd.rwnd_size < 10) {
             SM[sock_KTP].rwnd.rwnd_size++; 
         }
         SM[sock_KTP].app_read_seq_no++;
         
         pthread_mutex_unlock(&SM[sock_KTP].mutex);
-        return actual_len; // Return actual bytes, allowing EOF (0) to trigger
+        return actual_len; 
     }
     else{
         pthread_mutex_unlock(&SM[sock_KTP].mutex);
@@ -156,30 +153,33 @@ int k_recvfrom(int sock_KTP, void* buf, size_t size, int flags, const struct soc
 }
 
 int k_close(int sock_ktp){
-    // 1. FLUSH: Wait for all data (including EOF) to be transmitted AND acknowledged
     while(1) {
         pthread_mutex_lock(&SM[sock_ktp].mutex);
         int pending = 0;
         
-        // Are there messages still waiting to be sent?
         if (SM[sock_ktp].send_buffer_sz > 0) pending = 1;
         
-        // Are there messages sent but not yet ACKed?
         for(int j = 0; j < 10; j++){
             if (SM[sock_ktp].swnd.unacked[j] != -1) pending = 1;
         }
         pthread_mutex_unlock(&SM[sock_ktp].mutex);
 
-        if (!pending) break; // Everything is sent and acked! We can safely close.
-        usleep(50000); // Check again in 50ms
+        if (!pending) break; 
+        usleep(50000); 
     }
 
-    // 2. Now it is safe to signal the daemon to close the OS socket
+    printf("\n KTP TRANSFER STATISTICS \n");
+    printf("Drop Message Probability: %d\n",DROP_PROB);
+    printf("Total Unique Messages: %d\n", SM[sock_ktp].total_messages);
+    printf("Total Transmissions: %d\n", SM[sock_ktp].total_transmissions);
+    if (SM[sock_ktp].total_messages > 0) {
+        printf("Average Transmissions per Message: %.2f\n", 
+            (float)SM[sock_ktp].total_transmissions / SM[sock_ktp].total_messages);
+    }
     pthread_mutex_lock(&SM[sock_ktp].mutex);
     SM[sock_ktp].bind_done = -1; 
     pthread_mutex_unlock(&SM[sock_ktp].mutex);
     
-    // 3. Wait for daemon to finish closing
     while(SM[sock_ktp].not_free == 1) {
         usleep(10000);
     }
