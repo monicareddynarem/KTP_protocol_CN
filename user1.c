@@ -63,7 +63,7 @@ int main() {
     printf("File successfully added to send buffer. Total bytes: %d\n", total_sent);
     
     fclose(file);
-    sleep(7); 
+    // sleep(7); 
     k_close(M1);
     printf("Socket closed. Exiting.\n");
 

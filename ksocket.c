@@ -169,7 +169,7 @@ int k_close(int sock_ktp){
     }
 
     printf("\n KTP TRANSFER STATISTICS \n");
-    printf("Drop Message Probability: %d\n",DROP_PROB);
+    printf("Drop Message Probability: %f\n",DROP_PROB);
     printf("Total Unique Messages: %d\n", SM[sock_ktp].total_messages);
     printf("Total Transmissions: %d\n", SM[sock_ktp].total_transmissions);
     if (SM[sock_ktp].total_messages > 0) {
