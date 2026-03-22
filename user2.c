@@ -74,6 +74,7 @@ int main(int argc, char* argv[]) {
     printf("Total bytes received and saved: %d\n", total_received);
 
     fclose(file);
+    sleep(7);
     k_close(M2);
     return 0;
 }
