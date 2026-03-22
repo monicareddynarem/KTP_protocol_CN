@@ -13,7 +13,7 @@ int main() {
     printf("Starting Automated KTP Testing\n");
 
     for (int i = 0; i < num_probs; i++) {
-        printf("[*] Testing with DROP_PROB = %.2f\n", probs[i]);
+        printf("[%d] Testing with DROP_PROB = %.2f\n",i, probs[i]);
 
         snprintf(command, sizeof(command), "sed -i 's/#define DROP_PROB .*/#define DROP_PROB %.2f/' ksocket.h", probs[i]);
         system(command);
