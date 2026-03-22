@@ -1,3 +1,11 @@
+// Mini Project 1 Submission
+// Group Details:
+// Member 1 Name: Ramakurthi Ashok Chandra
+// Member 1 Roll No: 23CS10059
+// Member 2 Name: Monica Reddy Narem
+// Member 2 Roll No: 23CS10046
+
+
 #include "ksocket.h"
 #include <sys/socket.h>
 #include <sys/shm.h>
