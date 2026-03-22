@@ -6,7 +6,7 @@
 #include <sys/types.h>
 #include <pthread.h>
 
-#define DROP_PROB 0.45
+#define DROP_PROB 0.05
 #define T 5
 #define SOCK_KTP 100
 
